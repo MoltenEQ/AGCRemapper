@@ -1,6 +1,7 @@
 import PySimpleGUI as sg
 from PIL import Image, ImageOps, ImageChops
 import io
+import os
 
 file_types = [("Bitmap",".bmp"),("All files",".*")]
 
@@ -8,9 +9,9 @@ thumbnail_size=(64,64)
 
 
 window_layout = [
-    [sg.Text("Base BMP:"), sg.Input(key="BASE_BMP_INPUT", enable_events=True,default_text="test_base.bmp"), sg.FileBrowse(file_types=file_types, enable_events=True,), sg.Image(size=thumbnail_size, key="BASE_BMP_PREVIEW")],
-    [sg.Text("First color mask:"), sg.Input(key="FIRST_COLOR_INPUT", enable_events=True,default_text="test_mask1.bmp"), sg.FileBrowse(file_types=file_types, enable_events=True), sg.Image(size=thumbnail_size, key="FIRST_COLOR_PREVIEW")],
-    [sg.Text("Second color mask (Optional):"), sg.Input(key="SECOND_COLOR_INPUT", enable_events=True,default_text="test_mask2.bmp"), sg.FileBrowse(file_types=file_types, enable_events=True,), sg.Image(size=thumbnail_size, key="SECOND_COLOR_PREVIEW")],
+    [sg.Text("Base BMP:"), sg.Input(key="BASE_BMP_INPUT", enable_events=True), sg.FileBrowse(file_types=file_types, enable_events=True,), sg.Image(size=thumbnail_size, key="BASE_BMP_PREVIEW")],
+    [sg.Text("First color mask:"), sg.Input(key="FIRST_COLOR_INPUT", enable_events=True), sg.FileBrowse(file_types=file_types, enable_events=True), sg.Image(size=thumbnail_size, key="FIRST_COLOR_PREVIEW")],
+    [sg.Text("Second color mask (Optional):"), sg.Input(key="SECOND_COLOR_INPUT", enable_events=True), sg.FileBrowse(file_types=file_types, enable_events=True,), sg.Image(size=thumbnail_size, key="SECOND_COLOR_PREVIEW")],
     # [sg.Text("Mask threshold:"),sg.Input(key="THRESHOLD",default_text="8")],
     # [sg.Text("Output file name:"), sg.Text("")]
     [sg.Button(key="CONVERT",button_text="Convert")]
@@ -26,23 +27,34 @@ image_color_formats = {
 }
 
 
-def get_bytes(img: Image.Image, resize=None):
+def get_thumbnail_bytes(img: Image.Image, resize=None):
     """Get raw image bytes from Pillow"""
-    if resize is not None:
-        img.thumbnail(resize)
-    bytes = io.BytesIO()
-    img.save(bytes, format="PNG")
-    return bytes.getvalue()
+    if img is not None:
+        img_copy = img.copy()
+        if resize is not None:
+            img_copy.thumbnail(resize)
+        bytes_io = io.BytesIO()
+        img_copy.save(bytes_io, format="PNG")
+        return bytes_io.getvalue()
+    else:
+        return b''  # Return an empty bytes object when img is None
+
+def load_image(key):
+    file = window[key+"_INPUT"].get()
+    if os.path.isfile(file):
+        return Image.open(file)
+    else:
+        print(f"Error: File not found - {file}")
+        return None
 
 def load_images():
     global window
     for key in image_key_bases:
-        input_key = image_keys[key]["input_key"]
-        preview_key = image_keys[key]["preview_key"]
-        file = window[input_key].get()
-        image_keys[key]["image"] = Image.open(file)
-        img = image_keys[key]["image"]
-        window[preview_key].update(data=get_bytes(img, thumbnail_size))
+        image = load_image(key)
+        image_keys[key]["image"] = image
+        preview = get_thumbnail_bytes(image, thumbnail_size)
+        window[image_keys[key]["preview_key"]].update(data=preview)
+
 
 def fill_black_color(image: Image.Image, mask: Image.Image):
     """ Fill the image with a non-black color outside the mask."""
@@ -179,8 +191,6 @@ def convert():
                 # Calculate the position of the entry in the combined palette
                 color1_new_index = c1_palette_loc[0] + color1_index
                 filled_base_reduced.putpixel((x, y), color1_new_index)
-
-    filled_base_reduced.show()
 
     # Save the image with the custom palette
     output_path = "output.bmp"
