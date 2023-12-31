@@ -2,6 +2,7 @@ import PySimpleGUI as sg
 from PIL import Image, ImageOps, ImageChops
 import io
 import logging
+import os
 
 file_types = [("Bitmap",".bmp"),("All files",".*")]
 
@@ -20,8 +21,8 @@ window_layout = [
     [sg.Text("Base BMP:"), sg.Input(key="BASE_BMP_INPUT", enable_events=True), sg.FileBrowse(file_types=file_types, enable_events=True,), sg.Image(size=thumbnail_size, key="BASE_BMP_PREVIEW")],
     [sg.Text("First color mask:"), sg.Input(key="FIRST_COLOR_INPUT", enable_events=True), sg.FileBrowse(file_types=file_types, enable_events=True), sg.Image(size=thumbnail_size, key="FIRST_COLOR_PREVIEW")],
     [sg.Text("Second color mask (Optional):"), sg.Input(key="SECOND_COLOR_INPUT", enable_events=True), sg.FileBrowse(file_types=file_types, enable_events=True,), sg.Image(size=thumbnail_size, key="SECOND_COLOR_PREVIEW")],
-    [sg.Text("Mode:"),sg.Listbox(modes,key="MODE",enable_events=True,expand_y=True,default_values="model")],
-    [sg.Text("Output file name:"), sg.Text(file_names["model"],key="OUTPUT"), sg.Button(key="CONVERT",button_text="Convert")]
+    [sg.Text("Output folder:"), sg.Input(key="OUTPUT_FOLDER", enable_events=True), sg.FolderBrowse(),sg.Text("Mode:"),sg.Listbox(modes,key="MODE",enable_events=True,expand_y=True,default_values="model")],
+    [sg.Text("Filename:"), sg.Text(file_names["model"],key="OUTPUT"), sg.Button(key="CONVERT",button_text="Convert")]
 ]
 
 window = None
@@ -121,6 +122,8 @@ def convert():
     mask1 : Image.Image = image_keys["FIRST_COLOR"]["image"]
     mask2 : Image.Image = image_keys["SECOND_COLOR"]["image"]
 
+    # Check if the images are specified and loaded
+
     if base is None:
         sg.popup_error("No base image specified!")
         return
@@ -129,11 +132,21 @@ def convert():
         sg.popup_error("No primary mask specified!")
         return
     
-
     if mask2 is None:
             # Create a black image of the same size as the base if mask2 is None
             mask2 = Image.new("RGB", base.size, color=(0, 0, 0))
             logging.info("No secondary mask specified, using all blacks.")
+
+    # Check for matching sizes
+    if base.size != mask1.size or base.size != mask2.size:
+        sg.popup_error("Image size mismatch! Make sure that all of your images are the same size.")
+        return
+    
+    # Warning if thumbnail mode is selected and the image is not 200x160
+    if mode == "thumbnail" and base.size != (200,160):
+        result = sg.popup_ok_cancel("Images are not 200x160px. They may work not properly in the model selection screen.")
+        if result =="Cancel":
+            return
 
     # Convert masks to grayscale
     mask1_gray = ImageOps.grayscale(mask1)
@@ -212,8 +225,9 @@ def convert():
                 filled_base_reduced.putpixel((x, y), color1_new_index)
 
     # Save the image with the custom palette
-    output_path = file_names[mode]
+    output_path = os.path.join(window["OUTPUT_FOLDER"].get(),file_names[mode])
     filled_base_reduced.save(output_path, format='BMP', mode='P', palette=new_palette)
+    sg.popup_ok(f"File created as {output_path}")
     return
 
 def main():
