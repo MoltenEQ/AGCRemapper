@@ -4,7 +4,7 @@ import io
 import logging
 import os
 
-file_types = [("Bitmap",".bmp"),("All files",".*")]
+file_types = [("Image Files", (".bmp", ".png", ".jpg", ".jpeg", ".gif", ".tiff", ".webp")), ("All files", ".*")]
 
 modes = ["model","thumbnail"]
 mode = "model"
@@ -33,7 +33,6 @@ image_color_formats = {
     "model" : ((0,127),(128,191),(192,255)), # 128,64,64 palette
     "thumbnail" :((0,159),(192,223),(160,191)) # special palette for thumbnails
 }
-
 
 def get_thumbnail_bytes(img: Image.Image, resize=None):
     """Get raw image bytes from Pillow"""
@@ -117,6 +116,20 @@ def reduce_palette(image: Image.Image, palette_range):
     palette_size = max(1, palette_size)  # Ensure a minimum of 1 bit
     return image.quantize(colors=palette_size, method=2)
 
+def visualize_palette(palette):
+    image = Image.new("RGB", (16, 16))
+    for y in range(16):
+        for x in range(16):
+                index = (y * 16 + x) * 3
+                color = palette[index:index + 3]
+                if len(color) == 3:
+                    image.putpixel((x, y), tuple(color))
+                else:
+                    image.putpixel((x,y),(0,0,0))
+
+    image = image.resize((256,256),Image.NEAREST)
+    return image
+
 def convert():
     base : Image.Image = image_keys["BASE_BMP"]["image"]
     mask1 : Image.Image = image_keys["FIRST_COLOR"]["image"]
@@ -198,14 +211,28 @@ def convert():
     palette_filled_color1 = filled_color1_reduced.getpalette()
     palette_filled_color2 = filled_color2_reduced.getpalette()
 
-    new_palette = [0] * (3 * 256)  # Correct size for RGB mode
+    new_palette = [0] * (3 * 256)
+    if mode == "thumbnail":
+        new_palette = [0] * (3 * 14 * 16) # HACK, last two rows must not be used in thumbs
 
     # Assign palettes to specific positions in new_palette
-    new_palette[3 * base_palette_loc[0]:3 * (base_palette_loc[0] + len(palette_filled_base))] = palette_filled_base
-    new_palette[3 * c1_palette_loc[0]:3 * (c1_palette_loc[0] + len(palette_filled_color1))] = palette_filled_color1
-    new_palette[3 * c2_palette_loc[0]:3 * (c2_palette_loc[0] + len(palette_filled_color2))] = palette_filled_color2
+
+    base_new_loc = (base_palette_loc[0] * 3, (len(palette_filled_base)-1) * 3)
+    c1_new_loc = (c1_palette_loc[0] * 3, (len(palette_filled_color1)-1) * 3)
+    c2_new_loc = (c2_palette_loc[0] * 3, (len(palette_filled_color2)-1) * 3)
+
+    new_palette[base_new_loc[0]:base_new_loc[1]] = palette_filled_base
+    new_palette[c1_new_loc[0]:c1_new_loc[1]] = palette_filled_color1
+    new_palette[c2_new_loc[0]:c2_new_loc[1]] = palette_filled_color2
+
+    # test_img = visualize_palette(new_palette)
+    # test_img.show()
 
     filled_base_reduced.putpalette(new_palette)
+
+    # filled_base_reduced.show()
+    # filled_color1_reduced.show()
+    # filled_color2_reduced.show()
 
     # Manually composite images
     for x in range(filled_base_reduced.width):
@@ -223,6 +250,9 @@ def convert():
                 # Calculate the position of the entry in the combined palette
                 color1_new_index = c1_palette_loc[0] + color1_index
                 filled_base_reduced.putpixel((x, y), color1_new_index)
+
+    if len(new_palette) < 3 * 256:
+        new_palette.extend([0] * (3 * (256 - len(new_palette) // 3))) # HACK for the thumbnails
 
     # Save the image with the custom palette
     output_path = os.path.join(window["OUTPUT_FOLDER"].get(),file_names[mode])
