@@ -3,7 +3,9 @@
 A simple tool that allow you to create GoldSrc textures that can have their colors remapped, for example, multiplayer player models.
 Made in Python using PySimpleGui and Pillow.
 
-**Heavily work in progress!**
+![Screenshot](examples/app.png)
+
+**Work in progress!**
 ## Usage
 1. Have a BMP file that you want to convert. Example:
 
@@ -11,8 +13,8 @@ Made in Python using PySimpleGui and Pillow.
 
 2. Create 1 or 2 masks that have the same size as the original image. Non black (#000000) areas will be seen as the parts you want to recolor. Examples:
 
- ![Base PNG](examples/test_mask1.bmp) (Mask 1)
- ![Base PNG](examples/test_mask2.bmp) (Mask 2)
+ ![Mask 1 PNG](examples/test_mask1.bmp) (Mask 1)
+ ![Mask 2 PNG](examples/test_mask2.bmp) (Mask 2)
 
 3. Start AGCRemapper and open your files
 4. Convert! The result file will be ```Remap!_128_191_255.bmp``` or ```thumbnail.bmp```
@@ -23,7 +25,7 @@ Made in Python using PySimpleGui and Pillow.
 6. Compile the model with the tool of your choice (e.g.: Crowbar) / copy the thumbnail to MDL's folder.
 7. Enjoy!
 
- ![Base PNG](examples/result.gif)
+ ![Result GIF](examples/result.gif)
 
  ***Tip:*** Make sure that your masks don't overlap for best resulst!
 
