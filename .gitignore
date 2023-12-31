@@ -160,3 +160,6 @@ cython_debug/
 #.idea/
 
 .vscode/
+output.bmp
+RemapZ_128_191_255.bmp
+thumbnail.bmp

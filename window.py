@@ -1,19 +1,28 @@
 import PySimpleGUI as sg
 from PIL import Image, ImageOps, ImageChops
 import io
+import logging
+import os
 
 file_types = [("Bitmap",".bmp"),("All files",".*")]
+
+modes = ["model","thumbnail"]
+mode = "model"
+
+file_names = {
+    "model" : "RemapZ_128_191_255.bmp",
+    "thumbnail" :"thumbnail.bmp"
+}
 
 thumbnail_size=(64,64)
 
 
 window_layout = [
-    [sg.Text("Base BMP:"), sg.Input(key="BASE_BMP_INPUT", enable_events=True,default_text="test_base.bmp"), sg.FileBrowse(file_types=file_types, enable_events=True,), sg.Image(size=thumbnail_size, key="BASE_BMP_PREVIEW")],
-    [sg.Text("First color mask:"), sg.Input(key="FIRST_COLOR_INPUT", enable_events=True,default_text="test_mask1.bmp"), sg.FileBrowse(file_types=file_types, enable_events=True), sg.Image(size=thumbnail_size, key="FIRST_COLOR_PREVIEW")],
-    [sg.Text("Second color mask (Optional):"), sg.Input(key="SECOND_COLOR_INPUT", enable_events=True,default_text="test_mask2.bmp"), sg.FileBrowse(file_types=file_types, enable_events=True,), sg.Image(size=thumbnail_size, key="SECOND_COLOR_PREVIEW")],
-    # [sg.Text("Mask threshold:"),sg.Input(key="THRESHOLD",default_text="8")],
-    # [sg.Text("Output file name:"), sg.Text("")]
-    [sg.Button(key="CONVERT",button_text="Convert")]
+    [sg.Text("Base BMP:"), sg.Input(key="BASE_BMP_INPUT", enable_events=True), sg.FileBrowse(file_types=file_types, enable_events=True,), sg.Image(size=thumbnail_size, key="BASE_BMP_PREVIEW")],
+    [sg.Text("First color mask:"), sg.Input(key="FIRST_COLOR_INPUT", enable_events=True), sg.FileBrowse(file_types=file_types, enable_events=True), sg.Image(size=thumbnail_size, key="FIRST_COLOR_PREVIEW")],
+    [sg.Text("Second color mask (Optional):"), sg.Input(key="SECOND_COLOR_INPUT", enable_events=True), sg.FileBrowse(file_types=file_types, enable_events=True,), sg.Image(size=thumbnail_size, key="SECOND_COLOR_PREVIEW")],
+    [sg.Text("Output folder:"), sg.Input(key="OUTPUT_FOLDER", enable_events=True), sg.FolderBrowse(),sg.Text("Mode:"),sg.Listbox(modes,key="MODE",enable_events=True,expand_y=True,default_values="model")],
+    [sg.Text("Filename:"), sg.Text(file_names["model"],key="OUTPUT"), sg.Button(key="CONVERT",button_text="Convert")]
 ]
 
 window = None
@@ -26,23 +35,32 @@ image_color_formats = {
 }
 
 
-def get_bytes(img: Image.Image, resize=None):
+def get_thumbnail_bytes(img: Image.Image, resize=None):
     """Get raw image bytes from Pillow"""
-    if resize is not None:
-        img.thumbnail(resize)
-    bytes = io.BytesIO()
-    img.save(bytes, format="PNG")
-    return bytes.getvalue()
+    if img is not None:
+        img_copy = img.copy()
+        if resize is not None:
+            img_copy.thumbnail(resize)
+        bytes_io = io.BytesIO()
+        img_copy.save(bytes_io, format="PNG")
+        return bytes_io.getvalue()
+    else:
+        return b''  # Return an empty bytes object when img is None
+
+
 
 def load_images():
     global window
     for key in image_key_bases:
-        input_key = image_keys[key]["input_key"]
-        preview_key = image_keys[key]["preview_key"]
-        file = window[input_key].get()
-        image_keys[key]["image"] = Image.open(file)
-        img = image_keys[key]["image"]
-        window[preview_key].update(data=get_bytes(img, thumbnail_size))
+        file = window[key+"_INPUT"].get()
+        try:
+            image = Image.open(file)
+            image = image.convert("RGB")
+            image_keys[key]["image"] = image
+            preview = get_thumbnail_bytes(image, thumbnail_size)
+            window[image_keys[key]["preview_key"]].update(data=preview)
+        except AttributeError:
+            logging.error(f"Could not open image file: \"{file}\".")
 
 def fill_black_color(image: Image.Image, mask: Image.Image):
     """ Fill the image with a non-black color outside the mask."""
@@ -81,7 +99,7 @@ def fill_non_black_color(image: Image.Image, mask: Image.Image):
                     filled_image.putpixel((x, y), original_pixel)
     else:
         # Handle the case where there is no non-black pixel inside the mask
-        print("No non-black pixel found inside the mask.")
+        logging.warning("No non-black pixel found inside the mask.")
 
     return filled_image
 
@@ -103,6 +121,32 @@ def convert():
     base : Image.Image = image_keys["BASE_BMP"]["image"]
     mask1 : Image.Image = image_keys["FIRST_COLOR"]["image"]
     mask2 : Image.Image = image_keys["SECOND_COLOR"]["image"]
+
+    # Check if the images are specified and loaded
+
+    if base is None:
+        sg.popup_error("No base image specified!")
+        return
+    
+    if mask1 is None:
+        sg.popup_error("No primary mask specified!")
+        return
+    
+    if mask2 is None:
+            # Create a black image of the same size as the base if mask2 is None
+            mask2 = Image.new("RGB", base.size, color=(0, 0, 0))
+            logging.info("No secondary mask specified, using all blacks.")
+
+    # Check for matching sizes
+    if base.size != mask1.size or base.size != mask2.size:
+        sg.popup_error("Image size mismatch! Make sure that all of your images are the same size.")
+        return
+    
+    # Warning if thumbnail mode is selected and the image is not 200x160
+    if mode == "thumbnail" and base.size != (200,160):
+        result = sg.popup_ok_cancel("Images are not 200x160px. They may work not properly in the model selection screen.")
+        if result =="Cancel":
+            return
 
     # Convert masks to grayscale
     mask1_gray = ImageOps.grayscale(mask1)
@@ -144,7 +188,7 @@ def convert():
 
     # Switch to BMP/Palette mode and reduce the palette size to the specified ones
 
-    base_palette_loc,c1_palette_loc,c2_palette_loc = image_color_formats["model"]
+    base_palette_loc,c1_palette_loc,c2_palette_loc = image_color_formats[mode]
 
     filled_base_reduced = reduce_palette(filled_base, base_palette_loc)
     filled_color1_reduced = reduce_palette(filled_color1, c1_palette_loc)
@@ -180,19 +224,16 @@ def convert():
                 color1_new_index = c1_palette_loc[0] + color1_index
                 filled_base_reduced.putpixel((x, y), color1_new_index)
 
-    filled_base_reduced.show()
-
     # Save the image with the custom palette
-    output_path = "output.bmp"
+    output_path = os.path.join(window["OUTPUT_FOLDER"].get(),file_names[mode])
     filled_base_reduced.save(output_path, format='BMP', mode='P', palette=new_palette)
-
+    sg.popup_ok(f"File created as {output_path}")
     return
 
 def main():
     # for debugging
     global window
-    window = sg.Window("GoldSRC Color Remapper",window_layout ,finalize=True)
-    load_images()
+    window = sg.Window("AGCRemapper",window_layout)
 
     while True: # MAIN LOOP
 
@@ -200,6 +241,12 @@ def main():
 
         if event == sg.WINDOW_CLOSED:
             break
+
+        if event == "MODE":
+            global mode
+            mode = values["MODE"][0]
+            window["OUTPUT"].update(file_names[mode])
+
 
         if event == "CONVERT":
             convert()
