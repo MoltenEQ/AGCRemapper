@@ -25,6 +25,8 @@ Made in Python using PySimpleGui and Pillow.
 
  ![Base PNG](examples/result.gif)
 
+ ***Tip:*** Make sure that your masks don't overlap for best resulst!
+
 ## Known Issues
 
 * Thumbnail masks don't work if they are non-square black and white BMPs. Use other image formats, or just use another color instead of white.
