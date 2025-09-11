@@ -1,7 +1,7 @@
 # AGCRemapper
 ---
 A simple tool that allow you to create GoldSrc textures that can have their colors remapped, for example, multiplayer player models.
-Made in Python using PySimpleGui and Pillow.
+Made in Python 3.10.11 using PySimpleGui and Pillow.
 
 ![Screenshot](examples/app.png)
 
