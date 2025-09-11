@@ -52,14 +52,18 @@ def load_images():
     global window
     for key in image_key_bases:
         file = window[key+"_INPUT"].get()
+        if not file:
+            logging.info(f"No image for {key}")
+            continue # skip this file, 
         try:
             image = Image.open(file)
             image = image.convert("RGB")
             image_keys[key]["image"] = image
             preview = get_thumbnail_bytes(image, thumbnail_size)
             window[image_keys[key]["preview_key"]].update(data=preview)
+            logging.info(f"Image loaded: {key} - \"{file}\"")
         except AttributeError:
-            logging.error(f"Could not open image file: \"{file}\".")
+            logging.error(f"Could not open image file: \"{file}\"")
 
 def fill_black_color(image: Image.Image, mask: Image.Image):
     """ Fill the image with a non-black color outside the mask."""
@@ -98,7 +102,7 @@ def fill_non_black_color(image: Image.Image, mask: Image.Image):
                     filled_image.putpixel((x, y), original_pixel)
     else:
         # Handle the case where there is no non-black pixel inside the mask
-        logging.warning("No non-black pixel found inside the mask.")
+        logging.warning("No non-black pixel found inside the mask")
 
     return filled_image
 
@@ -148,7 +152,7 @@ def convert():
     if mask2 is None:
             # Create a black image of the same size as the base if mask2 is None
             mask2 = Image.new("RGB", base.size, color=(0, 0, 0))
-            logging.info("No secondary mask specified, using all blacks.")
+            logging.info("No secondary mask specified, using all blacks")
 
     # Check for matching sizes
     if base.size != mask1.size or base.size != mask2.size:
